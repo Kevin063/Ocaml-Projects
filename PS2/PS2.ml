@@ -258,13 +258,13 @@ let rec build_m (l: float list) (num: int) : matrix=
 match l with
 |[] ->[]
 |list -> build_l list num::build_m(cut list num) num;;
-let rec reverse (l: float list)(b:bool):float list=
+let rec reverse (l: float list)(b:int)(size : int):float list=
 match l with
 |[] -> []
 |hd::t1 ->
-  if b then hd::reverse t1 false
-  else -1.*.hd::reverse t1 true;;
+  if (b/size+b mod size) mod 2=1 then hd::reverse t1 (b+1) size
+  else -1.*.hd::reverse t1 (b+1) size;;
 let rec cofactor (m : matrix) : matrix =
   match m with
   |[] -> []
-  |hd::t1 ->build_m (reverse(into_list m) (true)) (length(hd));;
+  |hd::t1 ->build_m (reverse(into_list m) (1)(length(hd))) (length(hd));;
