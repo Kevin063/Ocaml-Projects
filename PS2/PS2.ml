@@ -262,9 +262,9 @@ let rec reverse (l: float list)(b:int)(size : int):float list=
 match l with
 |[] -> []
 |hd::t1 ->
-  if (b/size+b mod size) mod 2=1 then hd::reverse t1 (b+1) size
+  if (b/size+b mod size) mod 2=0 then hd::reverse t1 (b+1) size
   else -1.*.hd::reverse t1 (b+1) size;;
 let rec cofactor (m : matrix) : matrix =
   match m with
   |[] -> []
-  |hd::t1 ->build_m (reverse(into_list m) (1)(length(hd))) (length(hd));;
+  |hd::t1 ->build_m (reverse(into_list m) (0)(length(hd))) (length(hd));;
