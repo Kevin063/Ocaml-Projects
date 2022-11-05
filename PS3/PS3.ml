@@ -37,7 +37,7 @@ let rec filter (f : 'a -> bool) (ls : 'a myList) =
 let rec map (f : 'a -> 'b) (ls : 'a myList) : 'b myList = 
    match ls with
    | Nil -> Nil
-   | Cons(a,b) -> Cons(f a,filter f ls)
+   | Cons(a,b) -> Cons(f a,map f b)
 
 (* Problem 3.
    Implement the fold_left higher-order function. *)
@@ -45,16 +45,18 @@ let rec fold_left (f : 'a -> 'b -> 'a) (acc : 'a) (ls : 'b myList) : 'a =
    match ls with
    | Nil -> acc
    | Cons(a,b) -> fold_left f (f acc a) b
-
 (* Problem 4.
    Implement the fold_right higher order function. *)
 let rec fold_right (f : 'a -> 'b -> 'b) (ls : 'a myList) (acc : 'b) : 'b =
-  failwith "TODO"
-
+   match ls with
+   | Nil -> acc
+   | Cons(a,b) -> f a (fold_right f b acc) 
+let reverse (pp : 'a myList) : 'a myList=
+fold_left (fun l x-> Cons(x,l)) Nil pp
 (* Problem 5.
    Implement append in using fold_right. You may not use the 'rec' keyword. *)
-let append (ls1 : 'a myList) (ls2 : 'a myList) : 'a myList = failwith "TODO"
-
+let append (ls1 : 'a myList) (ls2 : 'a myList) : 'a myList =
+fold_right (fun x l->Cons(x,l)) ls1 ls2
 (* Problem 6.
    Implement a function 'concat' that when given a list of int myLists,
    appends them all together into a single myList.
@@ -67,8 +69,8 @@ let append (ls1 : 'a myList) (ls2 : 'a myList) : 'a myList = failwith "TODO"
    Notes:
    * You may NOT use any functions from the OCaml List module.
    * You may NOT use the '@' operator. *)
-let concat (lss : 'a myList myList) : 'a myList = failwith "TODO"
-
+let concat (lss : 'a myList myList) : 'a myList = 
+fold_left append Nil lss
 (* Problem 7.
    When given a list ls of type 'a myList, and a function f of
    type 'a -> 'b myList, flatMap maps f across all elements of
@@ -78,7 +80,8 @@ let concat (lss : 'a myList myList) : 'a myList = failwith "TODO"
       = Cons (1, Cons (2, Cons (2, Cons (3, Nil))))
 
    flatMap (Cons(4, Cons(6, Cons(8, Nil)))) factor = Cons(2, Cons(2, Cons(2, Cons(3, Cons(2, Cons(2, Cons(2, Nil))))))) *)
-let flatMap (ls : 'a myList) (f : 'a -> 'b myList) : 'b myList = failwith "TODO"
+let flatMap (ls : 'a myList) (f : 'a -> 'b myList) : 'b myList = 
+   concat (map f ls)
 
 (* Problem 8.
    Implement a function 'even_index', when given an int myList, output an int myList to record the position of even numbers.
@@ -88,8 +91,14 @@ let flatMap (ls : 'a myList) (f : 'a -> 'b myList) : 'b myList = failwith "TODO"
    even_index (Cons(2, Cons(4, Cons(6, Nil)))) = Cons (1, Cons (2, Cons (3, Nil)))
    even_index (Cons(1, Cons(2, Cons(3, Cons(4,  Nil))))) = Cons (2, Cons (4, Nil))
 *)
-let even_index (ls : int myList) : int myList = failwith "TODO"
-
+let even_index (ls : int myList) : int myList = 
+match (fold_left (fun (l,k) x-> (
+   match x mod 2 with
+   |0 -> (append l (Cons(k,Nil)),k+1)
+   |1 -> (l,k+1)
+   |_ -> (l,k+1)
+   )) (Nil,1) ls) with
+   (res,_)->res
 (* Problem 9.
    Implement a function 'vaild_par', when given a string myList which only contains "(" and ")",
    return Some true if the parenthesis myList is in a vaild format.
@@ -105,8 +114,17 @@ let even_index (ls : int myList) : int myList = failwith "TODO"
    valid_par (Cons(")", Cons ("(", Cons ("(", Cons (")", Nil))))) = Some false
    valid_par (Cons("(", Cons ("(", Cons (")", Cons ("(", Cons("(", Cons (")", Cons (")", Cons (")", Nil))))))))) = Some true
 *)
-let valid_par (ls : string myList) : bool option = failwith "TODO"
-
+let valid_par (ls : string myList) : bool option = 
+   match ls with 
+   | Nil -> None
+   | s -> (match (fold_left (fun k v ->
+      (match v with
+      | "(" -> k+1
+      | ")" -> if k>0 then k-1 else -14069299
+      (*Here we have an opening parenthesis, then destory the code making it false*)
+      | _ -> k) ) 0 s) with
+      | 0 -> Some true
+      | _ -> Some false)
 (* Problem 10.
    Implement a function 'i_matrix', when given a matrix which has int myList myList type,
    return Some true if the matrix is an identity matrix
@@ -117,8 +135,12 @@ let valid_par (ls : string myList) : bool option = failwith "TODO"
    i_matrix (Cons(Cons(1, Cons(0, Cons(0, Nil))), Cons(Cons(0, Cons(1, Cons(0, Nil))), Cons(Cons(0, Cons(0, Cons(1, Nil))), Nil)))) = Some true;;
    i_matrix (Cons(Cons(1, Cons(0, Cons(0, Cons (0, Nil)))), Cons(Cons(0, Cons(1, Cons(0, Cons(0, Nil)))), Cons(Cons(0, Cons(0, Cons(1, Cons(0, Nil)))), Nil)))) = Some false;;
 *)
-let i_matrix (matrix : int myList myList) : bool option = failwith "TODO"
-
+let i_matrix (matrix : int myList myList) : bool option = 
+   if filter (fun x -> if x>1 then false else true) (concat matrix)=(concat matrix) then
+   match matrix with
+   | Nil -> None
+   | n ->if (reverse (concat matrix)=concat matrix)&&((fold_left(fun a x -> if x=1 then a+1 else a) 0 (concat matrix))*(fold_left (fun a x -> if x=1 then a+1 else a) 0 (concat matrix))=fold_left (fun a x -> a+1) 0 (concat matrix))then Some true else Some false
+   else Some false
 (* Problem 11.
 
    A list could be used as a dictionary that maps values to values. We will use lists
@@ -135,7 +157,7 @@ let i_matrix (matrix : int myList myList) : bool option = failwith "TODO"
       * If the myList contains duplicate key entries, output the value associated to the "leftmost"
         entry.*)
 let find_key (dict : (string * int) myList) (key : string) : int option =
-  failwith "TODO"
+   fold_left (fun res (v,num) -> if res=None then (if v=key then Some num else None) else res ) None dict
 
 (* Problem 12.
    Implement a function 'to_freq', that when given a string myList, output a list of
@@ -154,7 +176,10 @@ let find_key (dict : (string * int) myList) (key : string) : int option =
       An output such as Cons(("a", 1), Cons(("a", 2), Nil)) is not accpeted.
     * Strings are case sensitive. "jack", "Jack" and "JACK" are considered different
       and their frequencies are counted independently.*)
-let to_freq (ls : string myList) : (string * int) myList = failwith "TODO"
+let to_freq (ls : string myList) : (string * int) myList = 
+   fold_left(fun list x -> (match (find_key list x) with
+      | None -> Cons((x,1),list)
+      | Some _ -> map (fun (o,k)-> if o=x then (o,k+1) else (o,k)) list)) Nil ls
 
 (* Problem 13.
    Implement a function 'win_chance',
@@ -197,7 +222,11 @@ let to_freq (ls : string myList) : (string * int) myList = failwith "TODO"
 
      The lengths of ls1 and ls2 are guaranteed to be at least 1 *)
 let win_chance (ls1 : int myList) (ls2 : int myList) : (int * int) myList =
-  failwith "TODO"
+  fold_left (fun res x -> fold_left (fun r y -> if (match x with 
+   | 1 -> 15
+   | _ -> x)>(match y with 
+   | 1 -> 15
+   | _ -> y) then Cons((x,y),r) else r) res ls2) Nil ls1
 
 (* Problem 14.
     Given an element x and a myList ls, insert x into all possible positions
@@ -216,8 +245,8 @@ let win_chance (ls1 : int myList) (ls2 : int myList) : (int * int) myList =
           Cons (Cons (4, Cons (3, Cons (2, Cons (1, Nil)))), Nil))))
 
     insert 1 Nil = Cons (Cons (1, Nil), Nil) *)
-let insert (x : 'a) (ls : 'a myList) : 'a myList myList = failwith "TODO"
-
+let insert (x : 'a) (ls : 'a myList) : 'a myList myList =
+   Cons(Cons(1,ls),(fold_left(fun res pivot -> Cons((fold_left(fun gen p -> if pivot=p then Cons(p,Cons(x,gen)) else Cons(p,gen)) Nil ls),res)) Nil ls));;
 (* Problem 15.
    Given a myList ls, generate all possible permutations of ls.
    Collect these permutations a nested myList output. The order
@@ -233,4 +262,5 @@ let insert (x : 'a) (ls : 'a myList) : 'a myList myList = failwith "TODO"
       Cons (Cons (1, Cons (3, Cons (2, Nil))),
         Cons (Cons (3, Cons (1, Cons (2, Nil))),
         Cons (Cons (3, Cons (2, Cons (1, Nil))), Nil)))))) *)
-let perm (ls : int myList) : int myList myList = failwith "TODO"
+let perm (ls : int myList) : int myList myList = 
+   fold_left (fun l x ->flatMap l (insert x)) (Cons(Nil,Nil)) ls
