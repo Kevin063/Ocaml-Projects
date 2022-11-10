@@ -14,11 +14,10 @@
 
 (*NOTE: There are no restrictions on what you can use*)
 let testinput1 = "Push 3\nPush 4\nPush 5\nPop\nAdd\nConcat\nQuit\nQuit\nQuit\nPush \"3\""
-let testinput2 = "Push \"test\"\nPush 2\nPush 3\nPush 2\nPush 10\nDiv\nQuit"
-let testinput3 = "Push \"chocolatechip\"\nPush \"cookie\"\nConcat\nQuit"
+let testinput2 = "Push \"test\"\nPush -2\nPush 3\nPush 2\nPush 10\nDiv\nQuit"
+let testinput3 = "Push \"red\"\nPush \"green\"\nPop\nPush 2934\nPop\nPush \"blue\"\nQuit"
 open Str
-#load "str.cma";;
-let idregex = Str.regexp "[a-zA-Z0-9\"]+[a-zA-Z0-9\"]*+$";;
+let idregex = Str.regexp "[a-zA-Z0-9\"-]+[a-zA-Z0-9\"]*+$";;
 type value =
   | Int of int
   | Str of string
@@ -87,7 +86,7 @@ match (String.sub act 0 3) with
 )
 | "Div" -> (
   match stack with
-  | Int(num1)::Int(num2)::tl -> ("",Int(num1/num2)::tl)
+  | Int(num1)::Int(num2)::tl -> if num2=0 then ("\"Error\"",stack) else ("",Int(num1/num2)::tl)
   | _ -> ("\"Error\"",stack)
 )
 | "Swa" -> (

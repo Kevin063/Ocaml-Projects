@@ -1,1 +1,2 @@
-"cookiechocolatechip"
+"blue"
+"red"
