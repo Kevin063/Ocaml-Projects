@@ -14,16 +14,22 @@
 
 (*NOTE: There are no restrictions on what you can use*)
 open Str;;
-let testinput1 = "Push 1\nLocal x\nPush 2\nLocal y\nBegin\nPush 20\nLocal x\nPush x\nPush y\nAdd\nEnd\nPush x\nAdd\nQuit\n"
-let testinput2 = "Push 10\nLocal x\nPush 0\nIfThen\nPush 5\nAdd\nElse\nPush x\nPush 234\nLocal x\nPush x\nEnd\nPush x\nQuit\n"
-let testinput3 = "Push \"red\"\nPush \"green\"\nPop\nPush 2934\nPop\nPush \"blue\"\nQuit"
-let testinput4 = "Local x\nQuit\n"
+let testinput1 = "Fun f1 x\nPush y\nReturn\nMut f2 x\nPush x\nPush 2\nMul\nLocal x\nPush x\nPush f1\nCall\nReturn\nMut f3 y\nPush y\nPush 1\nAdd\nLocal x\nPush x\nPush f2\nCall\nReturn\nEnd\nPush 3\nPush f2\nCall\nQuit\n"
+let testinput2 = "Fun regular x\nPush 11\nPush x\nTuple 2\nReturn\nEnd\nPush 22\nPush regular\nCall\nQuit\n"
+let testinput3 = "Fun odd x\nPush x\nPush 2\nMul\nLocal x\nPush x\nPush 46\nEqual\nIfThen\nPush x\nReturn\nElse\nPush x\nPush even\nCall\nReturn\nEnd\nMut even x\nPush 1\nPush x\nAdd\nLocal x\nPush x\nPush odd\nCall\nReturn\nEnd\nPush 5\nPush odd\nCall\nQuit"
+let testinput4 = "Fun f1 x\nPush x\nReturn\nMut f2 x\nPush x\nPush 2\nMul\nLocal x\nPush x\nPush f1\nCall\nReturn\nMut f3 x\nPush x\nPush 1\nAdd\nLocal x\nPush x\nPush f2\nCall\nReturn\nEnd\nPush 3\nPush f3\nCall\nQuit\n"
+let testinput5 = "Fun numOfStepsToOne x\nPush numOfSteps\nPush 1\nAdd\nGlobal numOfSteps\nPush x\nPush 1\nAdd\nLocal x\nPush x\nPush divideByTwo\nCall\nReturn\nMut divideByTwo x\nPush numOfSteps\nPush 1\nAdd\nGlobal numOfSteps\nPush 2\nPush x\nDiv\nLocal x\nPush x\nPush 1\nEqual\nIfThen\nPush numOfSteps\nReturn\nElse\nPush x\nPush numOfStepsToOne\nCall\nReturn\nEnd\nEnd\nPush 0\nGlobal numOfSteps\nPush 5\nPush numOfStepsToOne\nCall\nQuit"
+let testinput6 = "Fun snack laddoo\nPush laddoo\nPush 100\nMul\nLocal cal\nPush cal\nPush calories\nCall\nReturn\nMut calories cal\nPush 9\nPush cal\nDiv\nLocal g\nPush g\nPush sugar\nCall\nReturn\nMut sugar g\nPush g\nReturn\nEnd\nPush 9\nPush snack\nCall\nQuit"
 let stringregex = Str.regexp "[a-zA-Z0-9\"-]+[a-zA-Z0-9\"]*+\"+$"
 let idregex = Str.regexp "[a-zA-Z0-9\"-]+[a-zA-Z0-9\"]*+$"
 let numregex = Str.regexp "[0-9-]+[0-9]*+$";;
 type value =
   | Int of int
   | Str of string
+  | Pro of (string list)*string*string*int
+  | LUni of value*value
+  | RUni of value*value
+  | Tuple of value list
   | Err;;
 (*Writing a line to a file*)
 let write (file_path: string) (text: string): unit =
@@ -39,15 +45,23 @@ if (input=0) then false else true;;
 
 let bool_to_int (input : bool) : int=
 if input then 1 else 0;;
+
 (* Serach a var in the env *)
 let rec search (localenv : (string*value) list) (globalenv : (string*value) list) (key : string) : value=
-match localenv with
+match localenv with 
 | (k,v)::tl -> (if (k=key) then v else (search tl globalenv key))
 | [] -> (
   match globalenv with
 | (k2,v2)::tl2 -> (if (k2=key) then v2 else (search [] tl2 key))
 | [] ->Str("Not Found")
 );;
+
+(* Serach all functions belonging to a clo in the env *)
+let rec searchclo (localenv : (string*value) list) (cloversion : int) : (string*value) list=
+match localenv with 
+| (funame,Pro(fu,name,parameter,clv))::tl -> (if (clv=cloversion) then ((funame,Pro(fu,name,parameter,clv))::(searchclo tl cloversion)) else (searchclo tl cloversion))
+| _::tl -> searchclo tl cloversion
+| [] -> [] ;;
 
 (* Change value of a existing var in the env *)
 let rec change (env : (string*value) list)  (key : string) (va : value): (string*value) list=
@@ -78,13 +92,29 @@ match str.[0] with
 | '\n' -> String.sub str 1 (String.length str-1)
 | c -> removeone (String.sub str 1 (String.length str-1))
 
+(* Build a tuple output based on tuple values*)
+let rec buildouttuple (tuple : value list):string=
+match tuple with
+| [] -> ""
+| line::tl -> (match line with 
+| Int(i) -> string_of_int(i)
+| Str(s) -> s
+| Pro(_,name,para,_) -> "Clo ("^name^" "^para^")"
+| LUni(a,b) -> (String.sub (buildout [a]) 0 (String.length (buildout [a])-1))^" "^(buildout [b])
+| RUni(a,b) -> (String.sub (buildout [a]) 0 (String.length (buildout [a])-1))^" "^(buildout [b])
+| _ -> "")^","^buildouttuple tl
+
 (* Build a output based on actions *)
-let rec buildout (stack : value list):string=
+and buildout (stack : value list):string=
 match stack with
 | [] -> ""
 | line::tl -> (match line with 
 | Int(i) -> string_of_int(i)
 | Str(s) -> s
+| Pro(_,name,para,_) -> "Clo ("^name^" "^para^")"
+| LUni(a,b) -> (String.sub (buildout [a]) 0 (String.length (buildout [a])-1))^" "^(buildout [b])
+| RUni(a,b) -> (String.sub (buildout [a]) 0 (String.length (buildout [a])-1))^" "^(buildout [b])
+| Tuple(t) -> "("^(String.sub (buildouttuple t) 0 (String.length (buildouttuple t)-1))^")"
 | _ -> "")^"\n"^buildout tl
 
 (* Push from a stack into another *)
@@ -101,6 +131,34 @@ match act with
 | s::tl2 -> findelse tl2
 | [] -> false
 
+(*Check vaild Right from actions *)
+let rec findright (act : string list) : bool=
+match act with 
+| "Right"::tl1 -> true
+| s::tl2 -> findright tl2
+| [] -> false
+
+(*Delete until the first End from actions *)
+let rec skipuntilend (act : string list) : string list=
+match act with 
+| "End"::tl1 -> tl1
+| s::tl2 -> skipuntilend tl2
+| [] -> []
+
+(*Skip those actions that belonging to a Right condition *)
+let rec skipright (act : string list) : string list=
+match act with
+| "Right"::tl2 -> skipuntilend tl2
+| s::tl -> s::(skipright tl)
+| [] -> []
+
+(*Skip those actions that belonging to a false ifthen condition *)
+let rec skipleft (act : string list) : string list=
+match act with
+| "Right"::tl2 -> skipend tl2 0
+| s::tl -> skipleft tl
+| [] -> []
+
 (*Check vaild End from actions *)
 let rec findend (act : string list) : bool=
 match act with 
@@ -108,23 +166,28 @@ match act with
 | s::tl2 -> findend tl2
 | [] -> false
 
+(* Build a tuple with length n from stack *)
+let rec buildtuple (stack : value list) (n : int):(value list)*(value list)=
+match n with
+|0 -> [],stack
+|s -> (match stack with
+|hd::tl -> (match buildtuple tl (s-1) with
+| res,rem -> (hd::res),rem) 
+|[] -> [],stack)
+
+
 (*Delete the first End from actions *)
-let rec skipend (act : string list) : string list=
-match act with 
-| "End"::tl1 -> tl1
-| s::tl2 -> s::skipend tl2
-| [] -> []
-(*Delete until the first End from actions *)
-let rec skipuntilend (act : string list) : string list=
-match act with 
-| "End"::tl1 -> tl1
-| s::tl2 -> skipuntilend tl2
+let rec skipend (act : string list) (nested : int): string list=
+match act with
+| "Begin"::tl1 -> "Begin"::(skipend tl1 (nested+1)) 
+| "End"::tl1 -> if nested=0 then tl1 else skipend tl1 (nested-1)
+| s::tl2 -> s::skipend tl2 nested
 | [] -> []
 (*Skip those actions that belonging to a true ifthen condition *)
 let rec skiptrue (act : string list) : string list=
 match act with
-| "Else"::tl -> skipend tl
-| _::tl2 -> skipture tl2
+| "Else"::tl -> skipend tl 0
+| _::tl2 -> skiptrue tl2
 | [] -> []
 
 (*Skip those actions that belonging to a false ifthen condition *)
@@ -133,6 +196,7 @@ match act with
 | "Else"::tl2 -> skipuntilend tl2
 | s::tl -> s::(skipfalse tl)
 | [] -> []
+
 (* Execute one action from a actions list *)
 let executeone (act : string) (stack :value list) (localenv : (string*value) list) (globalenv : (string*value) list): string*(value list)*((string*value) list)*((string*value) list)= 
 match (String.sub act 0 2) with
@@ -236,60 +300,251 @@ match (String.sub act 0 2) with
   | num::tl -> ("",tl,localenv,(setenv globalenv (String.sub act 7 (String.length act-7)) num))
   | _ -> ("\"Error\"",stack,localenv,globalenv)
 )
+| "Tu"->(
+  match int_of_string_opt((String.sub act 6 (String.length act-6))) with
+  | None -> ("\"Error\"",stack,localenv,globalenv)
+  | Some 0 -> "",stack,localenv,globalenv
+  | Some num->(if (List.length stack) < num then ("\"Error\"",stack,localenv,globalenv) else (match (buildtuple stack num) with
+  | tu,st-> "",(Tuple(List.rev tu)::st),localenv,globalenv) 
+  )
+)
+| "Ge"-> (let n=int_of_string_opt((String.sub act 4 (String.length act-4))) in (match n with
+  |None -> ("\"Error\"",stack,localenv,globalenv)
+  |Some x->
+    ( match stack with
+  | Tuple(tu)::tl -> if (List.length tu <= x||x<0) then ("\"Error\"",stack,localenv,globalenv) else "",((List.nth tu x)::stack),localenv,globalenv
+  | _ -> ("\"Error\"",stack,localenv,globalenv)
+  )
+)
+)
+| "In" ->(
+  match act with
+  | "InjL" -> (
+    match stack with
+    | ele::tl -> ("",LUni(Str("Left"),ele)::tl,localenv,globalenv)
+    | _ -> ("\"Error\"",stack,localenv,globalenv)
+  )
+  | "InjR" -> (
+    match stack with
+    | ele::tl -> ("",RUni(Str("Right"),ele)::tl,localenv,globalenv)
+    | _ -> ("\"Error\"",stack,localenv,globalenv)
+  )
+  | _ -> ("\"Error\"",stack,localenv,globalenv)
+)
 | _ -> ("\"Error\"",stack,localenv,globalenv)
 
+(* Read and store a function from a actions list *)
+
+let rec read (act : string list) : (string list)*(string list)=
+match act with 
+| ac:: rem ->(match String.sub ac 0 3 with
+| "Mut" -> [],act
+| "End" -> [],rem
+| hd -> (match read rem with
+| ["\"Error\""],_ ->  ["\"Error\""],act
+| fu,acp -> ac::fu,acp))
+|[] ->  ["\"Error\""],[];;
+
+
 (* Execute a local part from a actions list *)
-let rec executelocal (act : string list) (stack : value list) (localenv : (string*value) list) (globalenv : (string*value) list): string*(string list)*(value list)*((string*value) list)*((string*value) list)=
+let rec executelocal (act : string list) (stack : value list) (localenv : (string*value) list) (globalenv : (string*value) list) (cloversion : int): string*(string list)*(value list)*((string*value) list)*((string*value) list)*int=
 match act with
-  | [] -> "\"Error\"",act,stack,localenv,globalenv
-  | "End"::tl1 -> ("",tl1,stack,localenv,globalenv)
-  | ac::tl2 ->(
-    match executeone ac stack localenv globalenv with
-    | ("\"Error\"",_,_,_) -> "\"Error\"",tl2,stack,globalenv,localenv
-    | (str,st,lo,gl)-> match (executelocal tl2 st lo gl) with
-      | ("\"Error\"",_,_,_,_) -> "\"Error\"",tl2,st,localenv,globalenv
-      | (strrem,actrem,stackrem,localrem,globalrem) ->  (str^strrem,actrem,stackrem,localenv,globalrem)
+  | [] -> "\"Error\"",act,stack,localenv,globalenv,cloversion
+  | "End"::tl1 -> ("",tl1,stack,localenv,globalenv,cloversion)
+  | "Begin" :: tl -> (
+    match (executelocal tl [] localenv globalenv cloversion) with
+      | ("\"Error\"",_,_,_,_,_) -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+      | (strrem,actrem,stackrem,localrem,globalrem,clo) ->  (
+        match stackrem with 
+        | [] -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+        | hd::_ ->(
+          match (executelocal actrem [hd] localenv globalrem clo) with
+          | ("\"Error\"",_,_,_,_,_) -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+          | (str,act,st,lo,gl,cl) -> strrem^str,act,st,lo,gl,cl
+        )
+      )
+  )
+  | "Call"::tl ->(
+  match stack with
+  | Pro(act,name,para,cl)::arg::pp ->(
+    match (executeclosure act [] ((searchclo localenv cl)@(para,arg)::localenv) globalenv cl) with
+  | ("\"Error\"",_,_,_,_,_) -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+  | (strrem,actrem,stackrem,localrem,globalrem,clv) -> (
+    match stackrem with 
+    | [] -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+    | hd::_ -> executelocal tl (hd::pp) localenv globalrem clv
+  )
+  )
+  | _ -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+)
+  | "IfThen"::tl -> (
+  if (findelse tl)&&(findend tl) then(
+    match stack with
+  | Int(0)::tl1 -> executelocal (skiptrue tl) tl1 localenv globalenv cloversion
+  | Int(1)::tl2 -> executelocal (skipfalse tl) tl2 localenv globalenv cloversion
+  | _::_ -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+  | [] -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+  )
+  else "\"Error\"",tl,[],localenv,globalenv,cloversion
+)
+| "CaseLeft"::tl -> (
+  if (findright tl)&&(findend tl) then(
+    match stack with
+  | LUni(_,c)::tl1 -> executelocal (skipright tl) (c::tl1) localenv globalenv cloversion
+  | RUni(_,c)::tl1 -> executelocal (skipleft tl) (c::tl1) localenv globalenv cloversion
+  | _::_ -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+  | [] -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+  )
+  else "\"Error\"",tl,[],localenv,globalenv,cloversion
+)
+  | a::tl2 ->(
+    if ((String.sub a 0 3="Fun")||(String.sub a 0 3="Mut")) then
+      (match read tl2 with
+      | ["\"Error\""],_ -> "\"Error\"",tl2,stack,globalenv,localenv,cloversion
+      | fu,ac-> executelocal ac stack (setenv localenv (List.nth (Str.split (Str.regexp " ") a) 1) (Pro(fu,List.nth (Str.split (Str.regexp " ") a) 1,(List.nth (Str.split (Str.regexp " ") a) 2),(if (String.sub a 0 3="Fun") then (cloversion+1) else cloversion)))) globalenv (if (String.sub a 0 3="Fun") then (cloversion+1) else cloversion)
+      )
+      else
+    match executeone a stack localenv globalenv with
+    | ("\"Error\"",_,_,_) -> "\"Error\"",tl2,stack,globalenv,localenv,cloversion
+    | (str,st,lo,gl)-> match (executelocal tl2 st lo gl cloversion) with
+      | ("\"Error\"",_,_,_,_,_) -> "\"Error\"",tl2,st,localenv,globalenv,cloversion
+      | (strrem,actrem,stackrem,localrem,globalrem,clv) ->  (str^strrem,actrem,stackrem,localenv,globalrem,clv)
   )
 
+  (* Execute a closure part from a actions list *)
+and executeclosure (act : string list) (stack : value list) (localenv : (string*value) list) (globalenv : (string*value) list) (cloversion : int): string*(string list)*(value list)*((string*value) list)*((string*value) list)*int=
+match act with
+  | [] -> "\"Error\"",act,stack,localenv,globalenv,cloversion
+  | "Return"::tl1 -> ("",tl1,stack,localenv,globalenv,cloversion)
+  | "Begin" :: tl -> (
+    match (executelocal tl [] localenv globalenv cloversion) with
+      | ("\"Error\"",_,_,_,_,_) -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+      | (strrem,actrem,stackrem,localrem,globalrem,clo) ->  (
+        match stackrem with 
+        | [] -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+        | hd::_ ->(
+          match (executelocal actrem [hd] localenv globalrem clo) with
+          | ("\"Error\"",_,_,_,_,_) -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+          | (str,act,st,lo,gl,cl) -> strrem^str,act,st,lo,gl,cl
+        )
+      )
+  )
+  | "Call"::tl ->(
+  match stack with
+  | Pro(act,name,para,cl)::arg::pp ->(
+    match (executeclosure act [] ((searchclo localenv cl)@(para,arg)::localenv) globalenv cl) with
+  | ("\"Error\"",_,_,_,_,_) -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+  | (strrem,actrem,stackrem,localrem,globalrem,clv) -> (
+    match stackrem with 
+    | [] -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+    | hd::_ -> executeclosure tl (hd::pp) localenv globalrem clv
+  )
+  )
+  | _ -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+)
+  | "IfThen"::tl -> (
+    (* if (findelse tl)&&(findend tl) then( *)
+  match stack with
+  | Int(0)::tl1 -> executeclosure (skiptrue tl) tl1 localenv globalenv cloversion
+  | Int(1)::tl2 -> executeclosure (skipfalse tl) tl2 localenv globalenv cloversion
+  | _::_ -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+  | [] -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+  (* ) *)
+  (* else "\"Error\"",tl,[],localenv,globalenv,cloversion *)
+)
+| "CaseLeft"::tl -> (
+  if (findright tl)&&(findend tl) then(
+    match stack with
+  | LUni(_,c)::tl1 -> executeclosure (skipright tl) (c::tl1) localenv globalenv cloversion
+  | RUni(_,c)::tl1 -> executeclosure (skipleft tl) (c::tl1) localenv globalenv cloversion
+  | _::_ -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+  | [] -> "\"Error\"",tl,[],localenv,globalenv,cloversion
+  )
+  else "\"Error\"",tl,[],localenv,globalenv,cloversion
+)
+| a::tl2 ->
+  (
+    if ((String.sub a 0 3="Fun")||(String.sub a 0 3="Mut")) then
+      (match read tl2 with
+      | ["\"Error\""],_ -> "\"Error\"",tl2,stack,globalenv,localenv,cloversion
+      | fu,ac-> executeclosure ac stack (setenv localenv (List.nth (Str.split (Str.regexp " ") a) 1) (Pro(fu,List.nth (Str.split (Str.regexp " ") a) 1,(List.nth (Str.split (Str.regexp " ") a) 2),(if (String.sub a 0 3="Fun") then (cloversion+1) else cloversion)))) globalenv (if (String.sub a 0 3="Fun") then (cloversion+1) else cloversion)
+      )
+      else
+       match executeone a stack localenv globalenv with
+  | ("\"Error\"",_,_,_) -> "\"Error\"",tl2,stack,globalenv,localenv,cloversion
+  | (str,st,lo,gl)-> match (executeclosure tl2 st lo gl cloversion) with
+    | ("\"Error\"",_,_,_,_,_) -> "\"Error\"",tl2,st,localenv,globalenv,cloversion
+    | (strrem,actrem,stackrem,localrem,globalrem,clv) ->  (str^strrem,actrem,stackrem,localenv,globalrem,clv)
+)
+
+
 (* Execute all from a actions list *)
-let rec execute (act : string list) (stack : value list) (localenv : (string*value) list) (globalenv : (string*value) list): string= 
+let rec execute (act : string list) (stack : value list) (localenv : (string*value) list) (globalenv : (string*value) list) (cloversion : int): string= 
 match act with
 | [] -> ""
 | "Quit"::_ -> buildout stack
 | "Begin"::tl ->(
-  match (executelocal tl [] localenv globalenv) with
-  | ("\"Error\"",_,_,_,_) -> "\"Error\""
-  | (strrem,actrem,stackrem,localrem,globalrem) -> (
+  match (executelocal tl [] localenv globalenv cloversion) with
+  | ("\"Error\"",_,_,_,_,_) -> "\"Error\""
+  | (strrem,actrem,stackrem,localrem,globalrem,cl) -> (
     match stackrem with 
     | [] -> "\"Error\""
-    | hd::_ -> strrem^(execute actrem (hd::stack) localenv globalrem)
+    | hd::_ -> strrem^(execute actrem (hd::stack) localenv globalrem cl)
   )
+)
+| "Call"::tl ->(
+  match stack with
+  | Pro(act,name,para,cl)::arg::pp ->(
+    match (executeclosure act [] ((searchclo localenv cl)@(para,arg)::localenv) globalenv cl) with
+  | ("\"Error\"",_,_,_,_,_) -> "\"Error\""
+  | (strrem,actrem,stackrem,localrem,globalrem,clv) -> (
+    match stackrem with 
+    | [] -> "\"Error\""
+    | hd::_ -> strrem^(execute tl (hd::pp) localenv globalrem clv)
+  )
+  )
+  | _ -> "\"Error\""
 )
 | "IfThen"::tl -> (
   if (findelse tl)&&(findend tl) then(
     match stack with
-  | Int(0)::tl1 -> execute (skiptrue tl) tl1 localenv globalenv
-  | Int(1)::tl2 -> execute (skipfalse tl) tl2 localenv globalenv
+  | Int(0)::tl1 -> execute (skiptrue tl) tl1 localenv globalenv cloversion
+  | Int(1)::tl2 -> execute (skipfalse tl) tl2 localenv globalenv cloversion
   | _::_ -> "\"Error\""
   | [] -> "\"Error\""
   )
   else "\"Error\""
 )
-| a::tl ->
-  (
+| "CaseLeft"::tl -> (
+  if (findright tl)&&(findend tl) then(
+    match stack with
+  | LUni(_,c)::tl1 -> execute (skipright tl) (c::tl1) localenv globalenv cloversion
+  | RUni(_,c)::tl1 -> execute (skipleft tl) (c::tl1) localenv globalenv cloversion
+  | _::_ -> "\"Error\""
+  | [] -> "\"Error\""
+  )
+  else "\"Error\""
+)
+
+| a::tl ->(
+  if ((String.sub a 0 3="Fun")||(String.sub a 0 3="Mut")) then
+  (match read tl with
+  | ["\"Error\""],_ -> "\"Error\""
+  | fu,ac-> execute ac stack (setenv localenv (List.nth (Str.split (Str.regexp " ") a) 1) (Pro(fu,List.nth (Str.split (Str.regexp " ") a) 1,(List.nth (Str.split (Str.regexp " ") a) 2),(if (String.sub a 0 3="Fun") then (cloversion+1) else cloversion)))) globalenv (if (String.sub a 0 3="Fun") then (cloversion+1) else cloversion)
+  )
+  else
     match (executeone a stack localenv globalenv) with 
     | ("\"Error\"",_,_,_) -> "\"Error\""
     | (output,st,lev,gev) -> (
-      match (execute tl st lev gev) with
+      match (execute tl st lev gev cloversion) with
     | "\"Error\"" -> "\"Error\""
     | out -> output^out
-    )
-  );;
+    ));;
 
 
 (* The recursive parse function *)
 let rec parse (str : string) (path: string) (actions : string list): unit=
-if (String.length str) ==0 then (write path (execute actions [] [] []) ) else let newline=(getone str 0)
+if (String.length str) ==0 then (write path (execute actions [] [] [] 0) ) else let newline=(getone str 0)
 in parse (removeone str) path (actions@[newline]);;
 
 let interpreter (src : string) (output_file_path: string): unit =
